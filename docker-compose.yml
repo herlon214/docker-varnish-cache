@@ -1,0 +1,59 @@
+version: '2'
+
+services:
+  redirect:
+    restart: always
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./conf/redirect.conf:/etc/nginx/nginx.conf:ro
+  ssl:
+    restart: always
+    image: nginx:latest
+    ports:
+      - "443:443"
+    depends_on:
+      - varnish
+    volumes:
+      - ./conf/ssl.conf:/etc/nginx/nginx.conf:ro
+      - /etc/letsencrypt/live/www.yourhost.com/fullchain.pem:/certs/fullchain.pem
+      - /etc/letsencrypt/live/www.yourhost.com/privkey.pem:/certs/privkey.pem
+  content:
+    restart: always
+    image: nginx:latest
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./conf/content.conf:/etc/nginx/nginx.conf:ro
+  varnish:
+    restart: always
+    image: herlon214/varnish
+    ports:
+      - "8080:6081"
+      - "6085:6085"
+    depends_on:
+      - content
+    volumes:
+      - ./varnish_config:/etc/varnish/conf.d/
+      - ./conf/secret:/etc/varnish/conf.d/secret
+    environment:
+      BACKENDS: "content"
+      BACKENDS_PORT: "8081"
+      ADMIN_PORT: ":6082"
+      DNS_ENABLED: "true"
+      BACKENDS_PROBE_INTERVAL: "3s"
+      BACKENDS_PROBE_TIMEOUT: "3s"
+      BACKENDS_PROBE_WINDOW: "3"
+      BACKENDS_PROBE_THRESHOLD: "2"
+      CACHE_SIZE: "512M"
+      #CACHE_STORAGE: "file,/etc/varnish/varnish_storage.bin,5G"
+  varnish_dashboard:
+    restart: always
+    image: nginx:latest
+    ports:
+      - "6884:8080"
+    volumes:
+      - ./dashboard:/var/www/
+      - ./conf/dashboard.conf:/etc/nginx/nginx.conf:ro
+      - ./conf/.htpasswd:/etc/nginx/.htpasswd # Generated with htpasswd
